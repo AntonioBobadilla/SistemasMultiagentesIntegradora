@@ -1,12 +1,7 @@
-#Programa que crea una simulacion donde robots limpian las diferentes casillas que existen en un tablero. En caso de que el robot se encuentre en una casilla
-#limpia, tendra que moverse, de lo contrario tendra que limpiarla antes de moverse. El programa recibe NxM filas y columnas del tablero respectivamente, asi como
-#el tiempo de ejecucion del programa (numero de movimientos posibles para los robots)y la cantidad de bloques sucios que se encuentran al inicio de la ejecucion.
 
 #Realizado por:
-#David Zárate López A01329785
-#Karen Rugerio Armenta  A01733228
 #José Antonio Bobadilla García A01734433
-#Ultima modificacion: 11/11/2021
+#Ultima modificacion: 30/11/2021
 
 
 from mesa import Agent, Model
@@ -40,9 +35,9 @@ class Robot(Agent):
     self.index = 0
    # stack al que tiene que dejar las cajas
     self.allocatedStack = 0
-  # Atributo para dejar cajas despues
+  # Atributo el cual nos dice si el robot tiene alguna caja en ese momento
     self.empty = True
-  # Atributo que nos servira en la api para dejar cajas
+  # Atributo que nos servira en unity para colocar las cajas apiladas
     self.leavingBoxes = False
 
   def step(self):
@@ -54,55 +49,57 @@ class Robot(Agent):
 
     if not full:
       self.leavingBoxes = False
+
       #el robot revisa si el bloque en el que esta se encuentra limpio
       clean = self.pickup()
       #si el robot todavia puede hacer movimientos y la casilla esta limpia significa que puede moverse
       if self.movements >= self.model.time:
         print("Se ha acabado el tiempo de ejecucion , teniendo un total de",  self.movements * self.model.robots,"movimientos")
-      if (self.model.Box == 0 and self.allRobotsEmpty()): # te quedaste probando esto
+      if (self.model.Box == 0 and self.allRobotsEmpty()): # se checa que ya no haya cajas y que los robots no tengan cajas.
         print("se han recogido todas las cajas en un total de", self.getTotalMovements(),"movimientos")
       if(self.movements < self.model.time and clean):
         self.movements += 1
         self.model.grid.move_agent(self, next_move)
-    else:
+    else: # si el robot ya tiene 5 cajas debe dejar las cajas en el stack
       
-
+      # sacamos el path hacia su stack especificado
       path = self.getPathToClosestStack(self.allocatedStack)
 
-      if(self.index < len(path)): # si entra sigue en camino
+      if(self.index < len(path)): # si entra sigue en camino hacia el stack
         next_move = path[self.index]
         self.index = 1
         self.model.grid.move_agent(self, next_move)
-      else: # si entra ya llegó a stack
-        self.index = 0
-        self.inventory = 0
-        self.leaveBoxes()
-        self.leavingBoxes = True
-        self.assignNewStack()
-      clean = True
+      else: # si entra ya llegó a su stack
+        self.index = 0 # se reinicia el indice para poder usarlo despues en otros paths hacia stack
+        self.inventory = 0 # se setea su numero de cajas a 0
+        self.leaveBoxes() # deja las cajas en su stack
+        self.leavingBoxes = True 
+        self.assignNewStack() # se le asigna un nuevo stack
+      clean = True # continuamos con los steps
  
-    #funcion auxiliar que dirige el robot hacia el stack mas cercano    
+    #funcion auxiliar que retorna el numero total de movimientos por todos los robots
   def getTotalMovements(self):
     movements = 0
     for robot in self.model.arrRobots:
       movements += robot.movements
     return movements
 
-    #funcion auxiliar que dirige el robot hacia el stack mas cercano    
+    #funcion auxiliar que retorna si todos los robots están vacios  
   def allRobotsEmpty(self):
     for robot in self.model.arrRobots:
         if not robot.empty:
           return False
     return True    
 
-   #funcion auxiliar que dirige el robot hacia el stack mas cercano    
+   #funcion auxiliar que asigna un nuevo stack al robot
   def assignNewStack(self):
     if (len(self.model.stacksPos) > 0):
          
       stackIndex = self.random.randint(0, len(self.model.stacksPos)-1)
       tupleOfStack = self.model.stacksPos[stackIndex]
-      # asignamos el siguiente movimiento como el stack
+      # asignamos el siguiente movimiento como la posicion del stack
       self.allocatedStack = tupleOfStack
+      # borramos ese stack del arreglo para que no sea utilizado por otros robots
       del self.model.stacksPos[stackIndex]
 
    #funcion auxiliar que dirige el robot hacia el stack mas cercano    
@@ -124,7 +121,7 @@ class Robot(Agent):
       path, runs = finder.find_path(start, end, grid)
       return path
 
-   #funcion auxiliar que saca la ruta hacia el stack mas cercano
+   #funcion auxiliar que saca la ruta hacia el un stack vacio
   def getPathToEmptyStack(self, stack):
       grid = PathGrid(matrix=self.model.matrix)
       grid.cleanup()
@@ -141,6 +138,7 @@ class Robot(Agent):
     else:
       return False
 
+  #funcion auxiliar que crea un arreglo de stacks que aún no están llenos
   def createArrayOfNotFullStacks(self):
     index = 0
     for stack in self.model.arrStacks:
@@ -148,26 +146,27 @@ class Robot(Agent):
           del self.model.arrStacks[index]
         index += 1
 
+  #funcion auxiliar que dej las cajas en los stacks que aún no están llenos
   def leaveMissingBoxes(self):
     cellmates = self.model.grid.get_cell_list_contents([self.pos])
     for block in cellmates:
       if(block.type == "Stack" ):
-       if (block.cajas < 5):
-         if ((block.cajas + self.inventory) < 5 ):
-           block.cajas = block.cajas + self.inventory
-           self.empty = True
-           self.inventory = 0
-         elif (((block.cajas + self.inventory) == 5 )):
-            block.cajas = 5
-            self.inventory = 0
-            block.full = True          
-         else: 
-           spareBoxes = (block.cajas + self.inventory) - 5
-           block.cajas = 5
+       if (block.cajas < 5): # si el stack tiene 5 cajas entra 
+         if ((block.cajas + self.inventory) < 5 ): # si el numero de cajas del stack + numero de cajas del robot es  mejor que 5 entra
+           block.cajas = block.cajas + self.inventory # el numero de cajas será el de la suma de los 2
+           self.empty = True # se setea el robot como vacio
+           self.inventory = 0  # se setea el número de cajas del robot a 0
+         elif (((block.cajas + self.inventory) == 5 )): # si el numero de cajas del stack + numero de cajas del robot es igual a 5 entra
+            block.cajas = 5 # se asigna el numero de cajas máximo al stack
+            self.inventory = 0 # se setea su inventario a 0
+            block.full = True # se setea el stack como lleno
+         else: # si el numero de cajas del stack + numero de cajas del robot es mayor a 5 entra
+           spareBoxes = (block.cajas + self.inventory) - 5 # se calculan las cajas sobrantes
+           block.cajas = 5 # se asigna el numero de cajas máximo al stack
            block.full = True
-           self.inventory = spareBoxes 
+           self.inventory = spareBoxes  # se asignan las cajas restantes al robot
            
-
+# funcion auxiliar que se dirije a un stack vacio
   def goToEmptyStack(self):
     if (len(self.model.arrStacks) > 0):
       path = self.getPathToEmptyStack(self.model.arrStacks[0])
@@ -179,7 +178,7 @@ class Robot(Agent):
         self.index = 0
         self.leaveMissingBoxes()
 
-  #funcion auxiliar que revisa si la casilla donde se encuentra el robot esta limpia
+  #funcion auxiliar que revisa si la casilla donde se encuentra el robot contiene una caja o no
   def pickup(self):
     cellmates = self.model.grid.get_cell_list_contents([self.pos])
     for block in cellmates:
@@ -190,18 +189,17 @@ class Robot(Agent):
        elif self.inventory != 0:
           self.createArrayOfNotFullStacks()
           self.goToEmptyStack()
-      if(block.type == "Box" ):
-        block.limpio = True
-        block.stackAsignadoX = self.allocatedStack[0]
+      if(block.type == "Box" ): # si es una caja 
+        block.limpio = True # se recoje
+        block.stackAsignadoX = self.allocatedStack[0] # se añaden coordenadas de stack que tiene el robot a caja 
         block.stackAsignadoY = self.allocatedStack[1]
-        block.changeColor()
-        self.limpiadas += 1
-        self.inventory += 1
-        block.inStack = self.inventory
-        self.model.Box -= 1
+        block.changeColor() # cambia el color del stack, significando que está lleno
+        self.limpiadas += 1 # se aumenta el número de cajas recogidas totales por el robot
+        self.inventory += 1 # se aumenta el número de cajas recogidas por el robot
+        block.inStack = self.inventory # el numero de caja que recogio el robot se le asigna a la caja para que unity coloque las cajas apiladas
+        self.model.Box -= 1 # se resta una caja al modelo principal
         return False
       else:
-      #elif(block.type == "CleanBlock"):
         return True
 
 
@@ -229,7 +227,7 @@ class CleanBlock(Agent):
     self.type = "CleanBlock"
     self.limpio = True
 
-#Agente Stacks
+#Agente Stack
 class Stack(Agent):
   def __init__(self, model, pos):
     super().__init__(model.next_id(), model)
@@ -240,7 +238,7 @@ class Stack(Agent):
 
 
 class Maze(Model):
-  #se asignan las variables modificables por el usuario siendo filas, columnas, robots, tiempo de ejecucion y el numero de bloques sucios
+  #se asignan las variables modificables por el usuario siendo filas, columnas, robots, tiempo de ejecucion y el numero de cajas
   def __init__(self, rows =10,columns = 10, robots = 5, time = 20000, Box = 60):
     super().__init__()
     self.schedule = RandomActivation(self)
@@ -250,16 +248,14 @@ class Maze(Model):
     self.time = time
     self.Box = Box
     self.Stacks = (Box // 5)
-    #if self.Stacks % 5 > 0:
-      #self.Stacks += 1
     self.grid = MultiGrid(self.columns, self.rows, torus=False)
     self.matrix = []
     self.stacksPos = []
     self.arrStacks = []
     self.arrRobots = []
-    #se crea una matriz de ceros para identificar las casillas sucias y limpias
+    #se crea una matriz de ceros para identificar las casillas con cajas y sin cajas
     self.createCeroMatrix()
-    #se crean los robots y bloques tanto limpios como sucios para colocarse en el tablero
+    #se crean los robots y bloques tanto cajas para colocarse en el tablero
     self.placeStacks()
     self.placeRobots()
     self.placeBox()
@@ -273,7 +269,7 @@ class Maze(Model):
   def count_type(model):
       return model.Box
 
-  #se crean los bloques sucios de manera aleatoria
+  #se crean las cajas de manera aleatoria
   def placeBox(self):
     blocks = self.Box
     while blocks > 0:
@@ -295,7 +291,7 @@ class Maze(Model):
         block = CleanBlock(self,(x,y))
         self.grid.place_agent(block, block.pos)
 
-  #se crea la matriz que contendra las casillas limpias y sucias
+  #se crea la matriz que contendra las casillas limpias y con cajas
   def createCeroMatrix(self):
     for i in range(0,self.rows):
       zeros = []
@@ -307,7 +303,6 @@ class Maze(Model):
   def placeRobots(self):
     for _ in range(0,self.robots):
       robot = Robot(self, (1, 1))
-     # solucion del problema 
        # sacamos una tupla aleatoria del arreglo que contiene las posiciones de los stacks
       if (len(self.stacksPos) > 0):
          
@@ -317,7 +312,6 @@ class Maze(Model):
         robot.allocatedStack = tupleOfStack
         del self.stacksPos[stackIndex]
       self.arrRobots.append(robot)
-     # solucion del problema 
       self.grid.place_agent(robot, robot.pos)
       self.schedule.add(robot)
 
