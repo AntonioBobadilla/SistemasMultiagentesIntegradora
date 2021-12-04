@@ -349,6 +349,6 @@ def agent_portrayal(agent):
 grid = CanvasGrid(agent_portrayal, 10, 10, 450, 450)
 
 
-#server = ModularServer(Maze, [grid], "Maze", {})
-#server.port = 8521
-#server.launch() 
+server = ModularServer(Maze, [grid], "Maze", {})
+server.port = 8521
+server.launch() 
